@@ -10,6 +10,17 @@ which is a living "Claude Code Best Practices" doc that grows as new features (p
 slash commands, hooks, marketplace, subagents, MCP, etc.) are explored in this repo. Keep
 that ~90% best-practices / ~10% app-description balance when editing `README.md`.
 
+## Rules
+
+Detailed, topic-specific conventions live in `.claude/rules/` and are imported below so
+they load every session — read the relevant one before touching that part of the codebase:
+
+@.claude/rules/code-style.md
+@.claude/rules/api-convention.md
+@.claude/rules/security.md
+@.claude/rules/testing.md
+@.claude/rules/git-workflow.md
+
 ## Commands
 
 ```powershell
@@ -18,8 +29,6 @@ uv run uvicorn main:app --reload     # run the dev server (http://127.0.0.1:8000
 uv run python main.py                # alternative: run directly (no --reload)
 uv run black .                       # format code (check-only: uv run black --check .)
 ```
-
-There is no test suite or build step configured in this project.
 
 Demo login: username `username` / password `password` (hardcoded in `main.py`).
 
@@ -41,87 +50,28 @@ templates/
   privacy.html
 static/
   style.css            # single global stylesheet, no preprocessor
+.claude/rules/          # topic-specific conventions, imported above
 ```
-
-## Routes
-
-| Method | Path              | Auth required | Returns                              |
-|--------|-------------------|----------------|----------------------------------------|
-| GET    | `/`               | —              | Redirect to `/dashboard` or `/login`   |
-| GET    | `/login`          | —              | Login page                             |
-| POST   | `/login`          | —              | Authenticate, sets session             |
-| GET    | `/register`       | —              | Register page (demo, static account)   |
-| POST   | `/register`       | —              | No-op, re-points to static credentials |
-| GET    | `/logout`         | —              | Clears session, redirects to `/login`  |
-| GET    | `/dashboard`      | yes            | Dashboard UI                           |
-| GET    | `/terms`          | —              | Terms and Conditions page              |
-| GET    | `/privacy`        | —              | Privacy Policy page                    |
-| POST   | `/expenses`       | yes            | Create an expense (JSON)               |
-| GET    | `/expenses`       | yes            | List expenses (JSON, `?category=`)     |
-| GET    | `/expenses/{id}`  | yes            | Get a single expense (JSON)            |
-| PUT    | `/expenses/{id}`  | yes            | Update an expense (JSON)               |
-| DELETE | `/expenses/{id}`  | yes            | Delete an expense (JSON)               |
-| GET    | `/summary`        | yes            | `{total_spent, by_category}` (JSON)    |
-
-`terms`/`privacy` are public but still receive `authenticated`/`username` context so the
-shared header renders the logout link when the visitor happens to be logged in.
-
-## Schema (SQLite via SQLModel ORM)
-
-Single table, defined as the `Expense` SQLModel class in `main.py`:
-
-| Column     | Type              | Notes                                  |
-|------------|-------------------|------------------------------------------|
-| `id`       | `int`, optional   | Primary key, autoincrement               |
-| `title`    | `str`             | Required                                 |
-| `amount`   | `float`           | Required                                 |
-| `category` | `str`             | Required, free text (not a foreign key)  |
-| `spent_on` | `date`            | Defaults to today if not provided        |
-| `notes`    | `str`, optional   | Free text                                |
-
-`ExpenseCreate` is a separate non-table SQLModel used as the request body for create/update
-— keep this split (table model vs. input model) rather than reusing `Expense` directly for
-request validation. All DB access goes through SQLModel's `Session`/`select()` (the ORM
-layer) — don't drop down to raw SQL or a second DB library. The engine is a single
-module-level `engine` in `main.py`; get a session with `with Session(engine) as session:`.
-
-## Coding conventions
-
-- Format with **black** (`uv run black .`) before committing — config is in
-  `pyproject.toml` (`line-length = 100`).
-- Use type hints on all function signatures (params + return types), matching the existing
-  style in `main.py` (e.g. `Optional[str]`, `-> None`). New route handlers and helpers
-  should follow the same convention.
-- Use SQLModel as the ORM for any new persisted data — define a new `SQLModel(table=True)`
-  class rather than hand-writing SQL, consistent with the `Expense` model.
 
 ## Architecture
 
 Single-file FastAPI app (`main.py`) with server-rendered Jinja2 templates and vanilla
 JS/CSS — no frontend build step, no JS framework.
 
-- **Auth**: session-based via `starlette.middleware.sessions.SessionMiddleware`, backed by
-  one hardcoded static account (`STATIC_USERNAME`/`STATIC_PASSWORD`). `is_authenticated()`
-  and `require_auth()` gate page routes and the `/expenses*`/`/summary` API respectively.
-  `/register` is a demo no-op that just points users back to the static credentials.
-- **Data/routes**: see the Routes and Schema sections above. Page routes return
-  `TemplateResponse`s; `/expenses*` and `/summary` return JSON, called from the dashboard's
-  inline `<script>` via `fetch`. `/summary` computes total spend and a per-category
-  breakdown by iterating all expenses in Python (no SQL aggregation).
-- **Templates** (`templates/`): `_header.html` and `_footer.html` are shared partials
-  included via Jinja `{% include %}` on every page for a consistent header/footer. Pages
-  that include the header must set `class="has-header"` on `<body>` (see CSS notes below)
-  and pass `authenticated`/`username` into the template context — the header shows the
-  logout link and links the brand icon to `/dashboard` only when `authenticated` is true.
-- **Styling** (`static/style.css`): one global stylesheet, no preprocessor. Two structural
-  points to preserve when editing:
-  - `.topbar` and `.site-footer` are `position: fixed` (top/bottom of viewport) on every
-    page. `body` has `padding-bottom` for the fixed footer; `body.has-header` adds
-    `padding-top` for the fixed header. Any new page reusing `_header.html` needs the
-    `has-header` body class or content will render underneath the fixed bar.
-  - The dashboard uses a sidebar + stat-cards + Chart.js layout (`.dash-layout`,
-    `.sidebar`, `.stats-row`, `.dash-grid`) — the sidebar's `position: sticky` offset is
-    `calc(var(--header-h) + 24px)` to clear the fixed header.
-- **Charts**: Chart.js is loaded via CDN `<script>` tag directly in `dashboard.html` (no
-  npm/bundler) and driven by a small inline script that renders a doughnut chart from
-  `/summary`'s `by_category` data.
+- **Auth**: session-based via `starlette.middleware.sessions.SessionMiddleware` against one
+  hardcoded static account. `is_authenticated()`/`require_auth()` gate page routes and the
+  `/expenses*`/`/summary` API respectively — see `security.md` for the full threat-model
+  notes and `api-convention.md` for the endpoint table.
+- **Data model**: a single `Expense` SQLModel table (`id`, `title`, `amount`, `category`,
+  `spent_on`, `notes`) backed by SQLite at `database/spend_tracker.db` — path is built from
+  `Path(__file__).parent / "database"` (not cwd-relative), folder auto-created on import.
+  `*.db` is gitignored. See `code-style.md` for the ORM/session conventions and
+  `api-convention.md` for the input-model-vs-table-model split.
+- **Templates**: `_header.html`/`_footer.html` are shared partials (see `code-style.md`).
+  The one thing not to forget: `.topbar` and `.site-footer` are `position: fixed` on every
+  page, so `body` needs `padding-bottom` (global) and `body.has-header` needs `padding-top`
+  — any new page including `_header.html` must add the `has-header` class or its content
+  renders underneath the fixed bar. The dashboard's sidebar is `position: sticky` with a
+  `calc(var(--header-h) + 24px)` offset to clear that same fixed header.
+- **Charts**: Chart.js loaded via CDN `<script>` tag in `dashboard.html` (no bundler),
+  driven by a small inline script rendering a doughnut chart from `/summary`.
