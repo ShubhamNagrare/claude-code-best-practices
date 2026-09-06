@@ -5,78 +5,120 @@
   <title>Dashboard - Spend Tracker</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <div class="topbar">
-    <h1>Spend Tracker</h1>
-    <div class="user-info">
-      <span>Signed in as <b>{{ username }}</b></span>
-      <a class="logout" href="/logout">Log Out</a>
-    </div>
+<body class="has-header">
+  {% include "_header.html" %}
+
+  <div class="dash-layout">
+    <aside class="sidebar">
+      <div class="sidebar-user">
+        <div class="avatar">{{ username[0]|upper }}</div>
+        <div class="sidebar-username">{{ username }}</div>
+        <div class="sidebar-balance" id="sidebar-total">$0.00</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" href="#top">Dashboard</a>
+        <a class="nav-item" href="#expenses-section">Transactions</a>
+      </nav>
+    </aside>
+
+    <main class="dash-main" id="top">
+      <div class="stats-row">
+        <div class="stat-card stat-blue">
+          <div class="stat-value" id="stat-total">$0.00</div>
+          <div class="stat-label">Total Spent</div>
+        </div>
+        <div class="stat-card stat-pink">
+          <div class="stat-value" id="stat-count">0</div>
+          <div class="stat-label">Transactions</div>
+        </div>
+        <div class="stat-card stat-green">
+          <div class="stat-value" id="stat-avg">$0.00</div>
+          <div class="stat-label">Avg / Transaction</div>
+        </div>
+        <div class="stat-card stat-purple">
+          <div class="stat-value" id="stat-categories">0</div>
+          <div class="stat-label">Categories</div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card chart-card">
+          <h2>Spend by Category</h2>
+          <div class="chart-wrap">
+            <canvas id="category-chart"></canvas>
+          </div>
+          <div id="summary-categories" class="category-legend"></div>
+        </div>
+
+        <div class="card">
+          <h2>Add Expense</h2>
+          <form id="expense-form">
+            <div class="field">
+              <label for="title">Title</label>
+              <input type="text" id="title" name="title" required />
+            </div>
+            <div class="field">
+              <label for="amount">Amount</label>
+              <input type="number" step="0.01" id="amount" name="amount" required />
+            </div>
+            <div class="field">
+              <label for="category">Category</label>
+              <input type="text" id="category" name="category" required />
+            </div>
+            <div class="field">
+              <label for="spent_on">Date</label>
+              <input type="date" id="spent_on" name="spent_on" />
+            </div>
+            <div class="field">
+              <label for="notes">Notes</label>
+              <input type="text" id="notes" name="notes" />
+            </div>
+            <button class="primary" type="submit">Add Expense</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card" id="expenses-section">
+        <h2>Expenses</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="expense-rows"></tbody>
+        </table>
+      </div>
+    </main>
   </div>
 
-  <div class="container">
-    <div class="card">
-      <h2>Add Expense</h2>
-      <form id="expense-form">
-        <div class="field">
-          <label for="title">Title</label>
-          <input type="text" id="title" name="title" required />
-        </div>
-        <div class="field">
-          <label for="amount">Amount</label>
-          <input type="number" step="0.01" id="amount" name="amount" required />
-        </div>
-        <div class="field">
-          <label for="category">Category</label>
-          <input type="text" id="category" name="category" required />
-        </div>
-        <div class="field">
-          <label for="spent_on">Date</label>
-          <input type="date" id="spent_on" name="spent_on" />
-        </div>
-        <div class="field">
-          <label for="notes">Notes</label>
-          <input type="text" id="notes" name="notes" />
-        </div>
-        <button class="primary" type="submit">Add Expense</button>
-      </form>
+  {% include "_footer.html" %}
 
-      <h2 style="margin-top:24px;">Summary</h2>
-      <div class="summary-total" id="summary-total">$0.00</div>
-      <div id="summary-categories"></div>
-    </div>
-
-    <div class="card">
-      <h2>Expenses</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Category</th>
-            <th>Amount</th>
-            <th>Date</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="expense-rows"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <footer class="site-footer">
-    <a href="/terms">Terms and Conditions</a>
-    <a href="/privacy">Privacy Policy</a>
-  </footer>
-
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
+    const CATEGORY_COLORS = [
+      '#2dd4bf', '#a3e635', '#fbbf24', '#fb923c', '#38bdf8',
+      '#f472b6', '#a78bfa', '#818cf8', '#34d399', '#f87171',
+    ];
+
     const form = document.getElementById('expense-form');
     const rowsEl = document.getElementById('expense-rows');
-    const totalEl = document.getElementById('summary-total');
     const categoriesEl = document.getElementById('summary-categories');
+    const sidebarTotalEl = document.getElementById('sidebar-total');
+    const statTotalEl = document.getElementById('stat-total');
+    const statCountEl = document.getElementById('stat-count');
+    const statAvgEl = document.getElementById('stat-avg');
+    const statCategoriesEl = document.getElementById('stat-categories');
+
+    let categoryChart = null;
 
     async function loadExpenses() {
       const res = await fetch('/expenses');
-      if (res.status === 401) { window.location.href = '/login'; return; }
+      if (res.status === 401) { window.location.href = '/login'; return []; }
       const expenses = await res.json();
       rowsEl.innerHTML = '';
       expenses.forEach((e) => {
@@ -90,25 +132,66 @@
         `;
         rowsEl.appendChild(tr);
       });
+      statCountEl.textContent = expenses.length;
+      return expenses;
     }
 
-    async function loadSummary() {
-      const res = await fetch('/summary');
-      if (res.status === 401) { window.location.href = '/login'; return; }
-      const summary = await res.json();
-      totalEl.textContent = `$${summary.total_spent.toFixed(2)}`;
+    function renderCategoryChart(byCategory) {
+      const labels = Object.keys(byCategory);
+      const values = Object.values(byCategory);
+      const colors = labels.map((_, i) => CATEGORY_COLORS[i % CATEGORY_COLORS.length]);
+
+      const ctx = document.getElementById('category-chart').getContext('2d');
+      if (categoryChart) categoryChart.destroy();
+      categoryChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }],
+        },
+        options: {
+          cutout: '65%',
+          plugins: { legend: { display: false } },
+        },
+      });
+
       categoriesEl.innerHTML = '';
-      Object.entries(summary.by_category).forEach(([cat, amt]) => {
+      labels.forEach((cat, i) => {
+        const amt = byCategory[cat];
+        const pct = values.reduce((a, b) => a + b, 0) > 0
+          ? (amt / values.reduce((a, b) => a + b, 0)) * 100
+          : 0;
         const row = document.createElement('div');
         row.className = 'category-row';
-        row.innerHTML = `<span>${cat}</span><span>$${amt.toFixed(2)}</span>`;
+        row.innerHTML = `
+          <span class="category-label">
+            <span class="category-dot" style="background:${colors[i]}"></span>${cat}
+          </span>
+          <span class="category-amount">$${amt.toFixed(2)}</span>
+          <span class="category-pct">${pct.toFixed(1)}%</span>
+        `;
         categoriesEl.appendChild(row);
       });
     }
 
+    async function loadSummary(count) {
+      const res = await fetch('/summary');
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      const summary = await res.json();
+      const totalText = `$${summary.total_spent.toFixed(2)}`;
+      statTotalEl.textContent = totalText;
+      sidebarTotalEl.textContent = totalText;
+      const categoryCount = Object.keys(summary.by_category).length;
+      statCategoriesEl.textContent = categoryCount;
+      statAvgEl.textContent = count > 0
+        ? `$${(summary.total_spent / count).toFixed(2)}`
+        : '$0.00';
+      renderCategoryChart(summary.by_category);
+    }
+
     async function refresh() {
-      await loadExpenses();
-      await loadSummary();
+      const expenses = await loadExpenses();
+      await loadSummary(expenses.length);
     }
 
     form.addEventListener('submit', async (evt) => {

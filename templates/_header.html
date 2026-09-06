@@ -1,0 +1,12 @@
+<div class="topbar">
+  <a class="brand" href="{{ '/dashboard' if authenticated else '/login' }}">
+    <span class="brand-icon">💰</span>
+    <h1>Spend Tracker</h1>
+  </a>
+  {% if authenticated %}
+  <div class="user-info">
+    <span>Signed in as <b>{{ username }}</b></span>
+    <a class="logout" href="/logout">Log Out</a>
+  </div>
+  {% endif %}
+</div>

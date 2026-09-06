@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -9,7 +10,9 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from starlette.middleware.sessions import SessionMiddleware
 
-DATABASE_URL = "sqlite:///./spend_tracker.db"
+DATABASE_DIR = Path(__file__).parent / "database"
+DATABASE_DIR.mkdir(exist_ok=True)
+DATABASE_URL = f"sqlite:///{DATABASE_DIR / 'spend_tracker.db'}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 STATIC_USERNAME = "username"
@@ -107,18 +110,33 @@ def dashboard(request: Request):
     if not is_authenticated(request):
         return RedirectResponse(url="/login")
     return templates.TemplateResponse(
-        "dashboard.html", {"request": request, "username": request.session.get("user")}
+        "dashboard.html",
+        {"request": request, "authenticated": True, "username": request.session.get("user")},
     )
 
 
 @app.get("/terms")
 def terms_page(request: Request):
-    return templates.TemplateResponse("terms.html", {"request": request})
+    return templates.TemplateResponse(
+        "terms.html",
+        {
+            "request": request,
+            "authenticated": is_authenticated(request),
+            "username": request.session.get("user"),
+        },
+    )
 
 
 @app.get("/privacy")
 def privacy_page(request: Request):
-    return templates.TemplateResponse("privacy.html", {"request": request})
+    return templates.TemplateResponse(
+        "privacy.html",
+        {
+            "request": request,
+            "authenticated": is_authenticated(request),
+            "username": request.session.get("user"),
+        },
+    )
 
 
 def require_auth(request: Request) -> None:
