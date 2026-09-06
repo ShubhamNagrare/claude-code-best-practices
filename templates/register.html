@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Register - Spend Tracker</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <h1>Create Account</h1>
+      <p class="hint">This is a demo app with a single static account.</p>
+
+      {% if message %}
+      <div class="info">{{ message }}</div>
+      {% endif %}
+
+      <form method="post" action="/register">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button class="primary" type="submit">Register</button>
+      </form>
+
+      <div class="switch-link">
+        Already have an account? <a href="/login">Log In</a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <a href="/terms">Terms and Conditions</a>
+    <a href="/privacy">Privacy Policy</a>
+  </footer>
+</body>
+</html>

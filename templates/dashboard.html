@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard - Spend Tracker</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <h1>Spend Tracker</h1>
+    <div class="user-info">
+      <span>Signed in as <b>{{ username }}</b></span>
+      <a class="logout" href="/logout">Log Out</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>Add Expense</h2>
+      <form id="expense-form">
+        <div class="field">
+          <label for="title">Title</label>
+          <input type="text" id="title" name="title" required />
+        </div>
+        <div class="field">
+          <label for="amount">Amount</label>
+          <input type="number" step="0.01" id="amount" name="amount" required />
+        </div>
+        <div class="field">
+          <label for="category">Category</label>
+          <input type="text" id="category" name="category" required />
+        </div>
+        <div class="field">
+          <label for="spent_on">Date</label>
+          <input type="date" id="spent_on" name="spent_on" />
+        </div>
+        <div class="field">
+          <label for="notes">Notes</label>
+          <input type="text" id="notes" name="notes" />
+        </div>
+        <button class="primary" type="submit">Add Expense</button>
+      </form>
+
+      <h2 style="margin-top:24px;">Summary</h2>
+      <div class="summary-total" id="summary-total">$0.00</div>
+      <div id="summary-categories"></div>
+    </div>
+
+    <div class="card">
+      <h2>Expenses</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Amount</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="expense-rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <a href="/terms">Terms and Conditions</a>
+    <a href="/privacy">Privacy Policy</a>
+  </footer>
+
+  <script>
+    const form = document.getElementById('expense-form');
+    const rowsEl = document.getElementById('expense-rows');
+    const totalEl = document.getElementById('summary-total');
+    const categoriesEl = document.getElementById('summary-categories');
+
+    async function loadExpenses() {
+      const res = await fetch('/expenses');
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      const expenses = await res.json();
+      rowsEl.innerHTML = '';
+      expenses.forEach((e) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${e.title}</td>
+          <td>${e.category}</td>
+          <td>$${e.amount.toFixed(2)}</td>
+          <td>${e.spent_on}</td>
+          <td><button class="delete-btn" data-id="${e.id}">Delete</button></td>
+        `;
+        rowsEl.appendChild(tr);
+      });
+    }
+
+    async function loadSummary() {
+      const res = await fetch('/summary');
+      if (res.status === 401) { window.location.href = '/login'; return; }
+      const summary = await res.json();
+      totalEl.textContent = `$${summary.total_spent.toFixed(2)}`;
+      categoriesEl.innerHTML = '';
+      Object.entries(summary.by_category).forEach(([cat, amt]) => {
+        const row = document.createElement('div');
+        row.className = 'category-row';
+        row.innerHTML = `<span>${cat}</span><span>$${amt.toFixed(2)}</span>`;
+        categoriesEl.appendChild(row);
+      });
+    }
+
+    async function refresh() {
+      await loadExpenses();
+      await loadSummary();
+    }
+
+    form.addEventListener('submit', async (evt) => {
+      evt.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      data.amount = parseFloat(data.amount);
+      if (!data.spent_on) delete data.spent_on;
+      if (!data.notes) delete data.notes;
+
+      await fetch('/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      form.reset();
+      refresh();
+    });
+
+    rowsEl.addEventListener('click', async (evt) => {
+      if (evt.target.matches('.delete-btn')) {
+        const id = evt.target.dataset.id;
+        await fetch(`/expenses/${id}`, { method: 'DELETE' });
+        refresh();
+      }
+    });
+
+    refresh();
+  </script>
+</body>
+</html>
