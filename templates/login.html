@@ -9,7 +9,11 @@
   <div class="auth-wrapper">
     <div class="auth-card">
       <h1>Spend Tracker</h1>
-      <p class="hint">Sign in with username: <b>username</b> / password: <b>password</b></p>
+      <p class="hint">New here? <a href="/register">Create an account</a> to get started.</p>
+
+      {% if info %}
+      <div class="info">{{ info }}</div>
+      {% endif %}
 
       {% if error %}
       <div class="error">{{ error }}</div>

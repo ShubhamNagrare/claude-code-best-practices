@@ -5,7 +5,8 @@ different features (permissions, slash commands, hooks, MCP, subagents, marketpl
 more, as we explore them). The app itself is a small expense tracker — the point of the
 repo is the workflow, not the app.
 
-**Demo login:** username `username` / password `password`
+**Getting started:** register an account at `/register`, then log in — there is no shared
+demo account.
 
 **Tech stack:** Python, FastAPI, SQLModel (SQLite), Jinja2 templates, vanilla JS/CSS.
 
@@ -109,6 +110,18 @@ main point of the repo — treat it as the checklist/playbook, not the app above
   inside it) rather than the folder itself, so the structure is documented in code without
   committing local data.
 
+## Splitting rules into `.claude/rules/` and importing them into CLAUDE.md
+
+- Topic-specific conventions (code style, API conventions, security notes, testing,
+  git workflow) live as separate files under `.claude/rules/` instead of one giant
+  `CLAUDE.md` — easier to find, easier to update one topic without touching the rest.
+- `CLAUDE.md` pulls them in with `@path/to/file` import syntax (e.g.
+  `@.claude/rules/code-style.md`) — imported files load automatically every session, same
+  as `CLAUDE.md` itself, so you don't have to remember to mention them.
+- Keep `CLAUDE.md` itself to what's genuinely project-wide (what the repo is, how to run
+  it, directory layout, cross-cutting architecture facts) and let the imported rule files
+  own their topic in depth — don't duplicate the same convention in both places.
+
 <!--
   Add new subsections here as we explore more features, e.g.:
   ## Hooks
@@ -165,7 +178,7 @@ uv.lock              # Locked dependency versions
 | GET    | /login            | Login page                            |
 | POST   | /login            | Authenticate                          |
 | GET    | /register         | Register page                         |
-| POST   | /register         | Register (demo, static account)       |
+| POST   | /register         | Create a new account                  |
 | GET    | /logout           | Clear session                         |
 | GET    | /dashboard        | Dashboard UI (requires login)         |
 | GET    | /terms            | Terms and Conditions                  |

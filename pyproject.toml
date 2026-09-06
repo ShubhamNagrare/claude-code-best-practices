@@ -11,6 +11,8 @@ dependencies = [
     "jinja2==3.1.5",
     "itsdangerous==2.2.0",
     "python-multipart==0.0.20",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt<4.1",
 ]
 
 [tool.uv]

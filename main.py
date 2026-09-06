@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -7,6 +7,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from passlib.context import CryptContext
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -15,9 +16,23 @@ DATABASE_DIR.mkdir(exist_ok=True)
 DATABASE_URL = f"sqlite:///{DATABASE_DIR / 'spend_tracker.db'}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-STATIC_USERNAME = "username"
-STATIC_PASSWORD = "password"
 SESSION_SECRET_KEY = "spend-tracker-dev-secret-change-me"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)
+    email: str = Field(unique=True, index=True)
+    password_hash: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class UserRegister(SQLModel):
+    username: str
+    email: str
+    password: str
 
 
 class Expense(SQLModel, table=True):
@@ -27,6 +42,7 @@ class Expense(SQLModel, table=True):
     category: str
     spent_on: date = Field(default_factory=date.today)
     notes: Optional[str] = None
+    user_id: int = Field(foreign_key="user.id")
 
 
 class ExpenseCreate(SQLModel):
@@ -57,6 +73,14 @@ def is_authenticated(request: Request) -> bool:
     return bool(request.session.get("user"))
 
 
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return pwd_context.verify(password, password_hash)
+
+
 @app.get("/")
 def root(request: Request):
     if is_authenticated(request):
@@ -68,17 +92,24 @@ def root(request: Request):
 def login_page(request: Request):
     if is_authenticated(request):
         return RedirectResponse(url="/dashboard")
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    info = (
+        "Account created — sign in to continue." if request.query_params.get("registered") else None
+    )
+    return templates.TemplateResponse(
+        "login.html", {"request": request, "error": None, "info": info}
+    )
 
 
 @app.post("/login")
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
-    if username == STATIC_USERNAME and password == STATIC_PASSWORD:
-        request.session["user"] = username
-        return RedirectResponse(url="/dashboard", status_code=303)
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.username == username)).first()
+        if user and verify_password(password, user.password_hash):
+            request.session["user"] = user.username
+            return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(
         "login.html",
-        {"request": request, "error": "Invalid username or password"},
+        {"request": request, "error": "Invalid username or password", "info": None},
         status_code=401,
     )
 
@@ -87,16 +118,37 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
 def register_page(request: Request):
     if is_authenticated(request):
         return RedirectResponse(url="/dashboard")
-    return templates.TemplateResponse("register.html", {"request": request, "message": None})
+    return templates.TemplateResponse(
+        "register.html", {"request": request, "error": None, "username": None, "email": None}
+    )
 
 
 @app.post("/register")
-def register_submit(request: Request, username: str = Form(...), password: str = Form(...)):
-    message = (
-        "This demo uses a static account only. "
-        f"Please sign in with username '{STATIC_USERNAME}' and password '{STATIC_PASSWORD}'."
+def register_submit(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+):
+    with Session(engine) as session:
+        username_taken = session.exec(select(User).where(User.username == username)).first()
+        email_taken = session.exec(select(User).where(User.email == email)).first()
+        if username_taken and email_taken:
+            message = "That username and email are both already registered."
+        elif username_taken:
+            message = "That username is already taken."
+        elif email_taken:
+            message = "That email is already registered."
+        else:
+            user = User(username=username, email=email, password_hash=hash_password(password))
+            session.add(user)
+            session.commit()
+            return RedirectResponse(url="/login?registered=1", status_code=303)
+    return templates.TemplateResponse(
+        "register.html",
+        {"request": request, "error": message, "username": username, "email": email},
+        status_code=409,
     )
-    return templates.TemplateResponse("register.html", {"request": request, "message": message})
 
 
 @app.get("/logout")
@@ -144,11 +196,19 @@ def require_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
 
+def current_user_id(request: Request, session: Session) -> int:
+    user = session.exec(select(User).where(User.username == request.session.get("user"))).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user.id
+
+
 @app.post("/expenses", response_model=Expense)
 def create_expense(expense: ExpenseCreate, request: Request):
     require_auth(request)
     with Session(engine) as session:
-        db_expense = Expense(**expense.model_dump(exclude_unset=True))
+        user_id = current_user_id(request, session)
+        db_expense = Expense(**expense.model_dump(exclude_unset=True), user_id=user_id)
         session.add(db_expense)
         session.commit()
         session.refresh(db_expense)
@@ -159,7 +219,8 @@ def create_expense(expense: ExpenseCreate, request: Request):
 def list_expenses(request: Request, category: Optional[str] = None):
     require_auth(request)
     with Session(engine) as session:
-        statement = select(Expense)
+        user_id = current_user_id(request, session)
+        statement = select(Expense).where(Expense.user_id == user_id)
         if category:
             statement = statement.where(Expense.category == category)
         return session.exec(statement).all()
@@ -169,7 +230,10 @@ def list_expenses(request: Request, category: Optional[str] = None):
 def get_expense(expense_id: int, request: Request):
     require_auth(request)
     with Session(engine) as session:
-        expense = session.get(Expense, expense_id)
+        user_id = current_user_id(request, session)
+        expense = session.exec(
+            select(Expense).where(Expense.id == expense_id, Expense.user_id == user_id)
+        ).first()
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         return expense
@@ -179,7 +243,10 @@ def get_expense(expense_id: int, request: Request):
 def update_expense(expense_id: int, expense: ExpenseCreate, request: Request):
     require_auth(request)
     with Session(engine) as session:
-        db_expense = session.get(Expense, expense_id)
+        user_id = current_user_id(request, session)
+        db_expense = session.exec(
+            select(Expense).where(Expense.id == expense_id, Expense.user_id == user_id)
+        ).first()
         if not db_expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         for key, value in expense.model_dump(exclude_unset=True).items():
@@ -194,7 +261,10 @@ def update_expense(expense_id: int, expense: ExpenseCreate, request: Request):
 def delete_expense(expense_id: int, request: Request):
     require_auth(request)
     with Session(engine) as session:
-        db_expense = session.get(Expense, expense_id)
+        user_id = current_user_id(request, session)
+        db_expense = session.exec(
+            select(Expense).where(Expense.id == expense_id, Expense.user_id == user_id)
+        ).first()
         if not db_expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         session.delete(db_expense)
@@ -206,7 +276,8 @@ def delete_expense(expense_id: int, request: Request):
 def spend_summary(request: Request):
     require_auth(request)
     with Session(engine) as session:
-        expenses = session.exec(select(Expense)).all()
+        user_id = current_user_id(request, session)
+        expenses = session.exec(select(Expense).where(Expense.user_id == user_id)).all()
         total = sum(e.amount for e in expenses)
         by_category: dict[str, float] = {}
         for e in expenses:
