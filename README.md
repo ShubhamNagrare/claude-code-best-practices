@@ -1,48 +1,93 @@
-# Spend Tracker (Claude Code Demo Project)
+# Claude Code Best Practices Demo
 
-This is a sample project created to demonstrate the power of **Claude Code** and its
-different features (permissions, slash commands, hooks, MCP, subagents, marketplace, and
-more, as we explore them). The app itself is a small expense tracker — the point of the
-repo is the workflow, not the app.
+A comprehensive guide to using **Claude Code** effectively in your projects, demonstrated
+through a working expense tracker application.
 
-**Demo login:** username `username` / password `password`
+**What this is:** A living reference documenting Claude Code workflows, features, and best
+practices as we explore them. The included app (Spend Tracker) is secondary — it exists to
+demonstrate practices, not as the deliverable.
 
-**Tech stack:** Python, FastAPI, SQLModel (SQLite), Jinja2 templates, vanilla JS/CSS.
-
-**Environment & dependencies:** managed with [uv](https://docs.astral.sh/uv/); declared in
-`pyproject.toml`, pinned in `uv.lock`.
-
-**Run it:**
-
-```powershell
-uv sync                              # create venv + install deps
-uv run uvicorn main:app --reload     # start the dev server
-```
-
-Open http://127.0.0.1:8000 — you'll land on the login page.
+**What this isn't:** A production application, a complete MCP reference, or a comprehensive
+API spec. It's a playground for learning.
 
 ---
 
-# Claude Code Best Practices
+## Quick Start
 
-A living reference, updated as we explore more of Claude Code in this project. This is the
-main point of the repo — treat it as the checklist/playbook, not the app above.
+**Demo login:** `username` / `password`
 
-## Project setup — do this before starting any project
+**Tech stack:** Python, FastAPI, SQLModel (SQLite), Jinja2 templates, vanilla JS/CSS
 
-- [ ] `git init` the repo before or immediately after the first meaningful change, so every
-      edit is tracked from the start.
-- [ ] Add a `.gitignore` before the first commit (venvs, `__pycache__/`, `.env`, DB files,
-      build output) so secrets and junk never get staged.
-- [ ] Create a `CLAUDE.md` (or confirm one exists) describing project conventions,
-      architecture notes, and anything Claude shouldn't need to re-derive every session.
-- [ ] Decide dependency/environment tooling up front (e.g. `uv`, `poetry`, `npm`) and pin
-      lockfiles — don't let Claude guess package managers mid-task.
-- [ ] Set a sensible Claude Code **permission mode** for the kind of work planned (tighter
-      for shared/production repos, looser for solo sandboxes) — see `/config`.
-- [ ] Add a remote (`git remote add origin ...`) and push early so work isn't only local.
-- [ ] Pick a license and record the author/owner (see License section below) before the
-      repo is shared publicly.
+**Setup:**
+
+```powershell
+uv sync                              # install dependencies
+uv run uvicorn main:app --reload     # start dev server (http://127.0.0.1:8000)
+uv run black .                       # format code
+```
+
+See [commands in CLAUDE.md](CLAUDE.md) for more.
+
+---
+
+# Claude Code Best Practices Guide
+
+A detailed playbook for working with Claude Code. Start here when setting up a new project,
+or reference specific sections as needed.
+
+## 1. Project Setup Checklist
+
+Start here with every new project. These steps set Claude Code up for success.
+
+### Before Writing Code
+
+- [ ] **Initialize git early:** `git init` before or immediately after the first change.
+  Every edit should be tracked from the start.
+- [ ] **Create `.gitignore`:** Add it before the first commit. Include venvs
+  (`__pycache__/`, `node_modules/`, `.venv/`), build output, secrets (`.env`, `.env.*`,
+  `*.key`), DB files, and platform files (`.DS_Store`, `Thumbs.db`).
+  
+  ```gitignore
+  # Python
+  __pycache__/
+  *.pyc
+  .venv/
+  
+  # Secrets & env
+  .env
+  .env.*
+  *.key
+  
+  # Data
+  *.db
+  *.sqlite
+  database/
+  
+  # IDE
+  .vscode/
+  .idea/
+  ```
+
+- [ ] **Write CLAUDE.md:** Document project conventions, architecture, tech stack, and
+  commands. See [CLAUDE.md](CLAUDE.md) in this repo for an example. This is the single
+  most important file — Claude reads it every session and uses it to understand your
+  preferences before diving into code.
+
+- [ ] **Set up `.claude/` folder structure** (see next section) with rules, settings, and
+  hooks that encode project conventions automatically.
+
+- [ ] **Choose dependency tooling upfront:** Pick one (`uv`, `pip`, `poetry`, `npm`) and
+  stick with it. Add a lockfile to `git` so Claude doesn't have to guess versions.
+
+- [ ] **Set a permission mode:** Use `/config` to pick a sensible default for your
+  situation (tighter for shared repos, looser for personal sandboxes). This reduces
+  permission prompts and makes the workflow smoother.
+
+- [ ] **Add a remote early:** `git remote add origin <url>` and push the initial commit.
+  Your work is now backed up and visible to collaborators.
+
+- [ ] **Pick a license before sharing:** Add a `LICENSE` file (this repo uses MIT) and
+  update `README.md` with author/copyright info. GitHub shows this on the repo homepage.
 
 ## Permissions
 
@@ -170,6 +215,7 @@ uv.lock              # Locked dependency versions
 | GET    | /dashboard        | Dashboard UI (requires login)         |
 | GET    | /terms            | Terms and Conditions                  |
 | GET    | /privacy          | Privacy Policy                        |
+| GET    | /refund-policy    | Refund Policy                         |
 | POST   | /expenses         | Create an expense                     |
 | GET    | /expenses         | List expenses                         |
 | GET    | /expenses/{id}    | Get a single expense                  |

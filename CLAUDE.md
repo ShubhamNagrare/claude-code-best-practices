@@ -33,12 +33,13 @@ database/
   spend_tracker.db    # SQLite file, created on startup, gitignored
 templates/
   _header.html         # shared header partial (topbar, logout)
-  _footer.html         # shared footer partial (Terms/Privacy links)
+  _footer.html         # shared footer partial (Terms/Privacy/Refund Policy links)
   login.html
   register.html
   dashboard.html
   terms.html
   privacy.html
+  refund-policy.html
 static/
   style.css            # single global stylesheet, no preprocessor
 ```
