@@ -139,6 +139,18 @@ def privacy_page(request: Request):
     )
 
 
+@app.get("/refund-policy")
+def refund_policy_page(request: Request):
+    return templates.TemplateResponse(
+        "refund-policy.html",
+        {
+            "request": request,
+            "authenticated": is_authenticated(request),
+            "username": request.session.get("user"),
+        },
+    )
+
+
 def require_auth(request: Request) -> None:
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Not authenticated")
